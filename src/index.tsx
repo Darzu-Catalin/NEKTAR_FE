@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import 'reactflow/dist/style.css';
+import './index.css'; // <-- import your global CSS
 
 // Debounce ResizeObserver
 const debounce = (fn: (...args: any[]) => void, ms: number) => {

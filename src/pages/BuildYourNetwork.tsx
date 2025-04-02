@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Typography, Button, CircularProgress } from '@mui/material';
+import { Container, Typography, Button, CircularProgress, Box } from '@mui/material';
 import { Splitter } from 'antd';
 import TextEditor from '../components/TextEditor';
 import Visualization from '../components/Visualization';
@@ -111,47 +111,46 @@ const BuildYourNetwork: React.FC = () => {
 
   return (
     <Container
+      maxWidth={false}
+      disableGutters
       sx={{
-        marginTop: '2rem',
-        width: '100vw',
-        height: '100vh', // Increased from 80vh for more space
-        padding: 0,
-        mb: 20,
+        backgroundColor: '#424242', // changed from black to dark gray
+        padding: '8px',
         boxSizing: 'border-box',
-        backgroundColor: 'black'
+        maxHeight: '100vh',
+        overflow: 'hidden',
       }}
     >
-      {/* File input and decode/convert button */}
-      <div style={{ padding: '1rem', height: '64px' }}> {/* Fixed height for header */}
+      {/* Header with file input and button */}
+      <Box sx={{ padding: '8px', height: '64px', backgroundColor: '#616161' }}>
         <input type="file" onChange={handleFileChange} />
         <Button
           variant="contained"
           onClick={handleDecodeAndConvert}
           disabled={!file || loading}
-          style={{ marginLeft: '1rem' }}
+          sx={{ marginLeft: '1rem' }}
         >
           Decode and Convert File
         </Button>
-        {loading && <CircularProgress size={24} style={{ marginLeft: '1rem' }} />}
+        {loading && <CircularProgress size={24} sx={{ marginLeft: '1rem' }} />}
         {error && (
-          <Typography color="error" style={{ marginTop: '0.5rem' }}>
+          <Typography color="error" sx={{ marginTop: '0.5rem' }}>
             {error}
           </Typography>
         )}
-      </div>
+      </Box>
+      {/* Splitter takes the remaining height */}
       <Splitter
         style={{
-          height: 'calc(100% - 64px)', // Adjusted for fixed header height
-          boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
-          width: '100%', // Ensure full width
+          height: 'calc(100vh - 128px - 50px)', // subtract header height + padding
+          width: '100%',
+          backgroundColor: '#616161', // changed from black to dark gray
         }}
       >
         <Splitter.Panel defaultSize="40%" min="20%" max="50%">
-          {/* Display DSL content */}
           <TextEditor value={dslContent} onChange={setDslContent} />
         </Splitter.Panel>
         <Splitter.Panel>
-          {/* Pass parsed devices and links to Visualization */}
           <Visualization devices={parsedDevices} links={parsedLinks} />
         </Splitter.Panel>
       </Splitter>

@@ -29,14 +29,11 @@ export interface Link {
   to: number;
 }
 
-// Scale factor to expand node positions (if needed)
-const SCALE_FACTOR = 10;
-
 // Define a custom interface for our node's data
 interface CustomNodeData {
   label: string;
   src: string;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void; 
   onDetails: () => void;
 }
 
@@ -55,13 +52,13 @@ const CustomNode = ({ id, data }: { id: string; data: CustomNodeData }) => {
       }}
     >
       {/* Incoming handle */}
-      <Handle type="target" position={Position.Left} style={{top: '50%', transform: 'translateY(-50%) translateX(+500%)', zIndex: '-1', border: 'none', background: 'none' }} />
+      <Handle type="target" position={Position.Left} style={{ top: '50%', transform: 'translateY(-50%) translateX(+500%)', zIndex: -1, border: 'none', background: 'none' }} />
       
       <img src={data.src} alt={data.label} style={{ width: 50, height: 50 }} />
       <div style={{ textAlign: 'center' }}>{data.label}</div>
       
       {/* Outgoing handle */}
-      <Handle type="source" position={Position.Right} style={{top: '50%', transform: 'translateY(-50%) translateX(-500%)', zIndex: '-1' , border: 'none', background: 'none' }} />
+      <Handle type="source" position={Position.Right} style={{ top: '50%', transform: 'translateY(-50%) translateX(-500%)', zIndex: -1, border: 'none', background: 'none' }} />
       
       {/* Toolbar with Delete and Details icon buttons, centered at the top */}
       <div
@@ -101,7 +98,7 @@ const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
   } | null>(null);
 
   // Use our custom node type with React Flow state hooks.
-  const [nodes, setNodes, onNodesChange] = useNodesState<CustomNodeType[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<CustomNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
 
   // Callback to delete a node (and remove connected edges)
@@ -118,10 +115,10 @@ const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
     setSelectedDevice({ id, label, src });
   }, []);
 
-  // Build nodes from devices, attach callbacks, and scale positions.
+  // Build nodes from devices and attach callbacks.
   useEffect(() => {
     setNodes(
-      devices.map((device): CustomNodeType => ({
+      devices.map((device): Node<CustomNodeData, 'custom'> => ({
         id: device.id.toString(),
         type: 'custom',
         data: {
@@ -131,12 +128,12 @@ const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
           onDetails: () =>
             handleDetails(device.id.toString(), device.name, device.src),
         },
-        position: { x: device.x * SCALE_FACTOR, y: device.y * SCALE_FACTOR },
+        position: { x: device.x, y: device.y },
       }))
     );
   }, [devices, handleDeleteNode, handleDetails, setNodes]);
 
-  // Build edges from links; set edge type to "straight" for straight lines.
+  // Build edges from links; set edge type to "straight".
   useEffect(() => {
     setEdges(
       links.map((link, index) => ({
@@ -149,14 +146,6 @@ const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
     );
   }, [links, setEdges]);
 
-  // Ensure the container fills its parent.
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.style.width = '100%';
-      containerRef.current.style.height = '100%';
-    }
-  }, []);
-
   return (
     <>
       <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -166,13 +155,15 @@ const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
-          fitView
+          // Remove fitView so the coordinates remain as provided:
           defaultEdgeOptions={{ style: { strokeWidth: 3, stroke: '#222' } }}
           style={{ background: '#f0f0f0' }}
         >
           <Background />
+          <MiniMap />
+          <Controls />
         </ReactFlow>
-      </div>
+      </div> 
       {/* Modal to display device details */}
       <Modal
         title="Device Details"
