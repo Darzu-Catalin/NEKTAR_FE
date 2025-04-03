@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Container, Typography, Button, CircularProgress, Box } from '@mui/material';
-import { Splitter } from 'antd';
+import { Splitter, Upload } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import TextEditor from '../components/TextEditor';
 import Visualization from '../components/Visualization';
 import pako from 'pako';
+import { DraggableImage, Link } from '../types'; // Import shared types
 
 // Helper function to convert a file to Base64
 const toBase64 = (file: File): Promise<string> =>
@@ -18,20 +20,6 @@ const toBase64 = (file: File): Promise<string> =>
 const b64toBlob = (base64: string, type = 'application/octet-stream'): Promise<Blob> => {
   return fetch(`data:${type};base64,${base64}`).then((res) => res.blob());
 };
-
-// Define interfaces for devices and links
-export interface DraggableImage {
-  id: number;
-  name: string;
-  src: string;
-  x: number;
-  y: number;
-}
-
-export interface Link {
-  from: number;
-  to: number;
-}
 
 const BuildYourNetwork: React.FC = () => {
   const [dslContent, setDslContent] = useState<string>(''); // DSL text for TextEditor
@@ -93,6 +81,11 @@ const BuildYourNetwork: React.FC = () => {
           src: node.data.src,
           x: node.position.x,
           y: node.position.y,
+          // Add the new characteristics
+          type: node.data.type,
+          coordinates: node.data.coordinates,
+          power_on: node.data.power_on,
+          interface: node.data.interface,
         }))
       );
       setParsedLinks(
@@ -122,17 +115,28 @@ const BuildYourNetwork: React.FC = () => {
       }}
     >
       {/* Header with file input and button */}
-      <Box sx={{ padding: '8px', height: '64px', backgroundColor: '#616161' }}>
-        <input type="file" onChange={handleFileChange} />
+      <Box sx={{ padding: '8px', height: '64px', backgroundColor: '#616161', display: 'flex', alignItems: 'center' }}>
+        <Upload
+          beforeUpload={(file) => {
+            setFile(file);
+            return false;
+          }}
+          showUploadList={true}
+        >
+          <Button variant="contained" color="success" sx={{ borderRadius: '16px' }} startIcon={<UploadOutlined />}>
+            Select File
+          </Button>
+        </Upload>
         <Button
           variant="contained"
+          color="success"
           onClick={handleDecodeAndConvert}
           disabled={!file || loading}
-          sx={{ marginLeft: '1rem' }}
+          sx={{ marginLeft: '1rem', borderRadius: '16px' }}
         >
           Decode and Convert File
         </Button>
-        {loading && <CircularProgress size={24} sx={{ marginLeft: '1rem' }} />}
+        {loading && <CircularProgress size={24} sx={{ marginLeft: '1rem', color: '' }} />}
         {error && (
           <Typography color="error" sx={{ marginTop: '0.5rem' }}>
             {error}

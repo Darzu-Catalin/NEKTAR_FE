@@ -18,12 +18,15 @@
     "antd": "^5.24.5",
     "konva": "^9.3.20",
     "pako": "^2.1.0",
+    "prismjs": "^1.30.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-draggable": "^4.4.6",
     "react-konva": "^19.0.3",
     "react-router-dom": "^6.30.0",
     "react-scripts": "5.0.1",
+    "react-simple-code-editor": "^0.14.1",
+    "react-syntax-highlighter": "^15.6.1",
     "reactflow": "^11.11.4",
     "typescript": "^4.9.5",
     "use-image": "^1.1.1",
@@ -54,6 +57,7 @@
     ]
   },
   "devDependencies": {
-    "@types/pako": "^2.0.3"
+    "@types/pako": "^2.0.3",
+    "@types/react-syntax-highlighter": "^15.5.13"
   }
 }
