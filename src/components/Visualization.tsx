@@ -2,81 +2,64 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
-  Node,
-  Edge,
   Handle,
   Position,
+  Node,
+  Edge,
   NodeTypes,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Modal, Button } from 'antd';
-import { DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Modal, Button, Popconfirm, Space, Typography, Avatar } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import { DraggableImage, InterfaceDetails, Link } from '../types';
 
-// Interfaces for devices and links
-export interface DraggableImage {
-  id: number;
-  name: string;
-  src: string;
-  x: number;
-  y: number;
-}
-
-export interface Link {
-  from: number;
-  to: number;
-}
-
-// Define a custom interface for our node's data
 interface CustomNodeData {
   label: string;
   src: string;
-  onDelete: (id: string) => void; 
+  onDelete: (id: string) => void;
   onDetails: () => void;
+  type: string;
+  coordinates: string;
+  power_on: boolean;
+  interface: InterfaceDetails;
 }
 
-// Define our custom node type
 type CustomNodeType = Node<CustomNodeData, 'custom'>;
 
-// Custom node component with handles and a top-centered toolbar
-const CustomNode = ({ id, data }: { id: string; data: CustomNodeData }) => {
-  return (
-    <div
-      style={{
-        padding: 10,
-        borderRadius: 5,
-        background: 'none',
-        position: 'relative',
-      }}
-    >
-      {/* Incoming handle */}
-      <Handle type="target" position={Position.Left} style={{ top: '50%', transform: 'translateY(-50%) translateX(+500%)', zIndex: -1, border: 'none', background: 'none' }} />
-      
-      <img src={data.src} alt={data.label} style={{ width: 50, height: 50 }} />
-      <div style={{ textAlign: 'center' }}>{data.label}</div>
-      
-      {/* Outgoing handle */}
-      <Handle type="source" position={Position.Right} style={{ top: '50%', transform: 'translateY(-50%) translateX(-500%)', zIndex: -1, border: 'none', background: 'none' }} />
-      
-      {/* Toolbar with Delete and Details icon buttons, centered at the top */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          display: 'flex',
-          gap: '4px',
-        }}
-      >
-        <Button type="text" icon={<DeleteOutlined />} onClick={() => data.onDelete(id)} />
-        <Button type="text" icon={<InfoCircleOutlined />} onClick={data.onDetails} />
-      </div>
+const CustomNode = ({ id, data }: { id: string; data: CustomNodeData }) => (
+  <div
+    className="custom-node"
+    onDoubleClick={() => data.onDetails()}
+    style={{ padding: 10, borderRadius: 5, background: 'none', position: 'relative' }}
+  >
+    <Handle
+      type="target"
+      position={Position.Left}
+      style={{ top: '50%', transform: 'translateY(-50%) translateX(+500%)', zIndex: -1, border: 'none', background: 'none' }}
+    />
+
+    <img src={data.src} alt={data.label} style={{ width: 50, height: 50 }} />
+    <div style={{ textAlign: 'center' }}>{data.label}</div>
+
+    <Handle
+      type="source"
+      position={Position.Right}
+      style={{ top: '50%', transform: 'translateY(-50%) translateX(-500%)', zIndex: -1, border: 'none', background: 'none' }}
+    />
+
+    <div className="node-toolbar" style={{ position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', gap: 4 }}>
+      <Popconfirm title="Delete this node?" onConfirm={() => data.onDelete(id)} okText="Yes" cancelText="No">
+        <Button type="text" icon={<DeleteOutlined />} />
+      </Popconfirm>
     </div>
-  );
-};
+
+    <style>{`.custom-node .node-toolbar{opacity:0;transition:opacity .3s}.custom-node:hover .node-toolbar{opacity:1}`}</style>
+  </div>
+);
 
 const nodeTypes: NodeTypes = {
   custom: CustomNode,
@@ -87,104 +70,119 @@ interface VisualizationProps {
   links: Link[];
 }
 
-const Visualization: React.FC<VisualizationProps> = ({ devices, links }) => {
+const VisualizationInner: React.FC<VisualizationProps> = ({ devices, links }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { project } = useReactFlow();
 
-  // State for the details modal; when a device is selected, its info is stored here.
-  const [selectedDevice, setSelectedDevice] = useState<{
+  const [selectedDevice, setSelectedDevice] = useState<null | {
     id: string;
     label: string;
     src: string;
-  } | null>(null);
+    type: string;
+    coordinates: string;
+    power_on: boolean;
+    interface: InterfaceDetails;
+  }>(null);
 
-  // Use our custom node type with React Flow state hooks.
   const [nodes, setNodes, onNodesChange] = useNodesState<CustomNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
+  const [pointerCoords, setPointerCoords] = useState<{ x: number; y: number } | null>(null);
 
-  // Callback to delete a node (and remove connected edges)
-  const handleDeleteNode = useCallback(
-    (id: string) => {
-      setNodes((nds) => nds.filter((node) => node.id !== id));
-      setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
-    },
-    [setNodes, setEdges]
-  );
-
-  // Callback to show device details in a modal.
-  const handleDetails = useCallback((id: string, label: string, src: string) => {
-    setSelectedDevice({ id, label, src });
+  const deleteNode = useCallback((id: string) => {
+    setNodes((nds) => nds.filter((n) => n.id !== id));
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
   }, []);
 
-  // Build nodes from devices and attach callbacks.
+  const showDetails = useCallback((d: DraggableImage) => {
+    setSelectedDevice({
+      id: d.id.toString(),
+      label: d.name,
+      src: d.src,
+      type: d.type || 'unknown',
+      coordinates: d.coordinates || `${d.x} ${d.y}`,
+      power_on: d.power_on || false,
+      interface: d.interface || { name: 'FastEthernet0', ip: '0.0.0.0', bandwidth: 0 },
+    });
+  }, []);
+
   useEffect(() => {
     setNodes(
-      devices.map((device): Node<CustomNodeData, 'custom'> => ({
-        id: device.id.toString(),
+      devices.map((dev): CustomNodeType => ({
+        id: dev.id.toString(),
         type: 'custom',
         data: {
-          label: device.name,
-          src: device.src,
-          onDelete: handleDeleteNode,
-          onDetails: () =>
-            handleDetails(device.id.toString(), device.name, device.src),
+          label: dev.name,
+          src: dev.src,
+          onDelete: deleteNode,
+          onDetails: () => showDetails(dev),
+          type: dev.type || 'unknown',
+          coordinates: dev.coordinates || `${dev.x} ${dev.y}`,
+          power_on: dev.power_on || false,
+          interface: dev.interface || { name: 'FastEthernet0', ip: '0.0.0.0', bandwidth: 0 },
         },
-        position: { x: device.x, y: device.y },
+        position: { x: dev.x, y: dev.y },
       }))
     );
-  }, [devices, handleDeleteNode, handleDetails, setNodes]);
+  }, [devices, deleteNode, showDetails]);
 
-  // Build edges from links; set edge type to "straight".
   useEffect(() => {
     setEdges(
-      links.map((link, index) => ({
-        id: `e${index}`,
-        source: link.from.toString(),
-        target: link.to.toString(),
-        type: 'straight',
-        animated: true,
-      }))
+      links.map((lnk, i) => ({ id: `e${i}`, source: lnk.from.toString(), target: lnk.to.toString(), type: 'straight', animated: true }))
     );
-  }, [links, setEdges]);
+  }, [links]);
 
   return (
-    <>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          // Remove fitView so the coordinates remain as provided:
-          defaultEdgeOptions={{ style: { strokeWidth: 3, stroke: '#222' } }}
-          style={{ background: '#f0f0f0' }}
-        >
-          <Background />
-          <MiniMap />
-          <Controls />
-        </ReactFlow>
-      </div> 
-      {/* Modal to display device details */}
-      <Modal
-        title="Device Details"
-        visible={!!selectedDevice}
-        onCancel={() => setSelectedDevice(null)}
-        footer={[
-          <Button key="close" onClick={() => setSelectedDevice(null)}>
-            Close
-          </Button>,
-        ]}
+    <div
+      ref={containerRef}
+      onMouseMove={(e) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const point = project({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        setPointerCoords({ x: Math.round(point.x), y: Math.round(point.y) });
+      }}
+      style={{ width: '100%', height: '100%', position: 'relative' }}
+    >
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        defaultEdgeOptions={{ style: { strokeWidth: 3, stroke: 'white' } }}
+        style={{ background: '#1C1C1E' }}
       >
+        <Background gap={25} size={1} color="#444" />
+      </ReactFlow>
+
+      {pointerCoords && (
+        <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', padding: '4px 10px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 12, borderRadius: 6, fontFamily: 'monospace', zIndex: 10 }}>
+          x: {pointerCoords.x} y: {pointerCoords.y}
+        </div>
+      )}
+
+      <Modal title="Device Details" open={!!selectedDevice} onCancel={() => setSelectedDevice(null)} footer={[<Button key="c" onClick={() => setSelectedDevice(null)}>Close</Button>]}> 
         {selectedDevice && (
-          <div style={{ textAlign: 'center' }}>
-            <img src={selectedDevice.src} alt={selectedDevice.label} style={{ width: 100, height: 100 }} />
-            <p>ID: {selectedDevice.id}</p>
-            <p>Name: {selectedDevice.label}</p>
-          </div>
+          <Space direction="vertical" align="center" style={{ width: '100%' }}>
+            <Avatar src={selectedDevice.src} size={80} />
+            <Typography.Title level={4}>{selectedDevice.label}</Typography.Title>
+            <Typography.Text>ID: {selectedDevice.id}</Typography.Text>
+            <Typography.Text>Type: {selectedDevice.type}</Typography.Text>
+            <Typography.Text>Coordinates: {selectedDevice.coordinates}</Typography.Text>
+            <Typography.Text>Power On: {selectedDevice.power_on ? 'Yes' : 'No'}</Typography.Text>
+            <Typography.Text>Interface: {selectedDevice.interface.name}</Typography.Text>
+            <Typography.Text>IP: {selectedDevice.interface.ip}</Typography.Text>
+            <Typography.Text>Bandwidth: {selectedDevice.interface.bandwidth} Mbps</Typography.Text>
+          </Space>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
+
+const Visualization: React.FC<VisualizationProps> = (props) => (
+  <ReactFlowProvider>
+    <VisualizationInner {...props} />
+  </ReactFlowProvider>
+);
 
 export default Visualization;

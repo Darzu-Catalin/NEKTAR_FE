@@ -1,7 +1,11 @@
+// src/components/TextEditor.tsx
 import React from 'react';
-import { Input } from 'antd';
-
-const { TextArea } = Input;
+import Editor from 'react-simple-code-editor';
+import Prism from 'prismjs';
+import '../utils/myDsl';                // Custom PrismJS language definition
+import 'prismjs/themes/prism-tomorrow.css'; // Base Prism theme
+import '../assets/DslStyles.css';       // DSL token color overrides
+import { appleGray } from '../theme';    // Theme grayscale colors
 
 interface TextEditorProps {
   value: string;
@@ -9,43 +13,69 @@ interface TextEditorProps {
 }
 
 const TextEditor: React.FC<TextEditorProps> = ({ value, onChange }) => {
+  // Code font settings
+  const codeFontFamily = '"SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace';
+  const codeFontSize = 14;            // px
+  const codeLineHeight = '1.5em';     // matches typical editor line height
+
+  // Split lines for gutter
+  const lines = value.split('\n');
+
   return (
-    <>
+    <div
+      style={{
+        display: 'flex',
+        height: '100%',
+        width: '100%',
+        overflow: 'auto',      // single scroll container
+        fontFamily: codeFontFamily,
+        fontSize: codeFontSize,
+        lineHeight: codeLineHeight,
+      }}
+    >
+      {/* Line number gutter */}
       <div
         style={{
-          width: '100%',
-          height: '100%',
-          padding: 8,
-          boxSizing: 'border-box',
-          background: '#1e1e1e',
+          padding: '16px 8px',
+          textAlign: 'right',
+          userSelect: 'none',
+          color: appleGray[500],
+          flexShrink: 0,
         }}
       >
-        <TextArea
+        {lines.map((_, i) => (
+          <div key={i}>{i + 1}</div>
+        ))}
+      </div>
+
+      {/* Editor area */}
+      <div style={{ flexGrow: 1 }}>
+        <Editor
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="DSL content will appear here..."
-          style={{
-            width: '100%',
-            height: '100%',
-            resize: 'none',
-            fontFamily: 'Poppins, sans-serif',
-            background: '#1e1e1e',
-            color: 'white',
-            border: '1px solid gray',
-            outline: 'none',
+          onValueChange={onChange}
+          highlight={(code) => {
+            if (Prism.languages['my-dsl']) {
+              return Prism.highlight(code, Prism.languages['my-dsl'], 'my-dsl');
+            }
+            return code;
           }}
+          padding={16}
+          style={{
+            fontFamily: codeFontFamily,
+            fontSize: codeFontSize,
+            lineHeight: codeLineHeight,
+            color: appleGray[100],
+            background: 'none',    // parent Box provides background
+            border: 'none',
+            outline: 'none',
+            whiteSpace: 'pre',
+            minHeight: '100%',
+          }}
+          textareaClassName="editor-textarea"
+          aria-label="DSL Code Editor"
         />
       </div>
-      <style>
-        {`
-          .ant-input::placeholder {
-            color: white !important;
-            opacity: 1;
-            font-family: 'Poppins', sans-serif;
-          }
-        `}
-      </style>
-    </>
+    </div>
   );
 };
 

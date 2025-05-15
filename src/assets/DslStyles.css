@@ -1,0 +1,45 @@
+/* Comments (//) -> #50FA7B (green) */
+.token.comment {
+    color: #50FA7B;
+  }
+  
+  /* Arrows -> (->) -> #FF5555 (red) */
+  .token.arrow {
+    color: #FF5555;
+  }
+  
+  /* Keywords & properties -> #FF79C6 (pink) */
+  .token.keyword {
+    color: #FF79C6;
+  }
+  
+  /* Device type definitions -> #88E9FD (cyan) */
+  .token.type {
+    color: #88E9FD;
+  }
+  
+  /* IP addresses -> #BD93F9 (purple) */
+  .token.ip {
+    color: #BD93F9;
+  }
+  
+  /* Numbers -> #F1FA8C (yellow) */
+  .token.number {
+    color: #F1FA8C;
+  }
+  
+  /* Braces & punctuation -> #6272A4 (grey-blue) */
+  .token.punctuation {
+    color: #6272A4;
+  }
+  
+  /* Identifiers -> #F8F8F2 (white) */
+  .token.identifier {
+    color: #F8F8F2;
+  }
+  
+  /* Optional: Overall background -> #282A36 (dark) */
+  .your-editor-container {
+    background-color: #282A36;
+  }
+  
