@@ -78,7 +78,7 @@ function App() {
                   </Routes>
               </Box>
               </AuthProvider>
-            </Router>
+            </Router> 
         </Box>
       </ConfigProvider>
     </ThemeProvider>

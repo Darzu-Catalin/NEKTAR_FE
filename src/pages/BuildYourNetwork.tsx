@@ -106,9 +106,14 @@ const BuildYourNetwork: React.FC = () => {
             const formData = new FormData();
             formData.append('file', xmlBlob, 'input.xml');
 
-            const convertResponse = await fetch('http://127.0.0.1:5000/convert', {
+            const token = localStorage.getItem("token");
+
+            const convertResponse = await fetch('http://127.0.0.1:5000/api/convert', {
                 method: 'POST',
                 body: formData,
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                }
             });
 
             if (!convertResponse.ok) {
@@ -173,9 +178,12 @@ const BuildYourNetwork: React.FC = () => {
         setLoading(true);
         setError('');
         try {
+            const token = localStorage.getItem("token");
             const response = await fetch('http://127.0.0.1:5000/reactflow', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                 },
                 body: JSON.stringify({ dsl: dslContent }),
             });
 
