@@ -108,7 +108,7 @@ const BuildYourNetwork: React.FC = () => {
 
             const token = localStorage.getItem("token");
 
-            const convertResponse = await fetch('http://127.0.0.1:5000/api/convert', {
+            const convertResponse = await fetch('http://127.0.0.1:5000/api/decode', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -179,7 +179,7 @@ const BuildYourNetwork: React.FC = () => {
         setError('');
         try {
             const token = localStorage.getItem("token");
-            const response = await fetch('http://127.0.0.1:5000/reactflow', {
+            const response = await fetch('http://127.0.0.1:5000/api/compile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
