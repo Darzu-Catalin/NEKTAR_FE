@@ -294,7 +294,7 @@ const BuildYourNetwork: React.FC = () => {
           },
           body: JSON.stringify({
             title: saveTitle,
-            content: JSON.stringify(reactFlowTopologyToSave), // Save the freshly compiled React Flow JSON
+            content: JSON.stringify(reactFlowTopologyToSave),
           }),
         });
 
