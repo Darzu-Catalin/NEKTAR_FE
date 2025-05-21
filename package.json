@@ -20,6 +20,7 @@
     "pako": "^2.1.0",
     "prismjs": "^1.30.0",
     "react": "^19.1.0",
+    "react-bits": "^1.0.5",
     "react-dom": "^19.1.0",
     "react-draggable": "^4.4.6",
     "react-konva": "^19.0.3",
