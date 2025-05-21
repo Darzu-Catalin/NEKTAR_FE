@@ -1,5 +1,6 @@
 // src/pages/BuildYourNetwork.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 // Added alpha for glassmorphism effect
 import {
   Container,
@@ -23,7 +24,8 @@ import TextEditor from '../components/TextEditor';
 import Visualization from '../components/Visualization';
 import pako from 'pako';
 import { DraggableImage, Link } from '../types';
-import theme, { appleGray } from '../theme';
+import theme, { appleGray, appleWhite } from '../theme'; // Ensure appleWhite is exported or use a direct value
+import api from '../api'; // Ensure your api instance is imported
 
 // Helper: file -> Base64
 const toBase64 = (file: File): Promise<string> =>
@@ -39,6 +41,12 @@ const b64toBlob = (base64: string, type = 'application/octet-stream'): Promise<B
   return fetch(`data:${type};base64,${base64}`).then((res) => res.blob());
 };
 
+// Add this interface
+interface TopologyLocationState {
+  loadedDsl?: string;
+  loadedReactFlow?: any;
+  loadedTitle?: string;
+}
 const BuildYourNetwork: React.FC = () => {
   const [dslContent, setDslContent] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -53,6 +61,39 @@ const BuildYourNetwork: React.FC = () => {
 
   const [openSaveDialog, setOpenSaveDialog] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
+
+  // Add these hooks
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Add this useEffect
+  useEffect(() => {
+    const state = location.state as TopologyLocationState | null;
+    if (state?.loadedDsl !== undefined && state?.loadedReactFlow) {
+      setDslContent(state.loadedDsl);
+      setSaveTitle(state.loadedTitle || file?.name || 'Loaded Topology'); // Pre-fill save title
+
+      const nodes = state.loadedReactFlow.nodes || [];
+      const edges = state.loadedReactFlow.edges || [];
+
+      setParsedDevices(
+        nodes.map((node: any) => ({
+          id: parseInt(node?.id ?? '0', 10),
+          name: node?.data?.label ?? 'Unknown',
+          src: node?.data?.src ?? '',
+          x: node?.position?.x ?? 0,
+          y: node?.position?.y ?? 0,
+          type: node?.data?.type ?? 'unknown',
+          coordinates: node?.data?.coordinates ?? `${node?.position?.x ?? 0} ${node?.position?.y ?? 0}`,
+          power_on: node?.data?.power_on ?? false,
+          interface: node?.data?.interface ?? { name: 'N/A', ip: 'N/A', bandwidth: 0 },
+        }))
+      );
+      setParsedLinks(edges.map((edge: any) => ({ from: parseInt(edge?.source ?? '0', 10), to: parseInt(edge?.target ?? '0', 10) })));
+      navigate(location.pathname, { replace: true, state: null }); // Clear state after loading
+    }
+  }, [location, navigate, file?.name]); // Added file?.name to dependencies for saveTitle
+
 
   const handleFileChange = (info: UploadChangeParam) => {
       setError('');
@@ -81,8 +122,8 @@ const BuildYourNetwork: React.FC = () => {
         setDslContent('');
 
         try {
-            const base64File = await toBase64(file);
-            const decodeResponse = await fetch(
+            const base64File = await toBase64(file); // This remains a local helper
+            const decodeLambdaResponse = await fetch( // This is the external lambda call
                 'https://1nlsyfjbcb.execute-api.eu-south-1.amazonaws.com/default/pka2xml',
                 {
                     method: 'POST',
@@ -91,12 +132,12 @@ const BuildYourNetwork: React.FC = () => {
                 }
             );
 
-            if (!decodeResponse.ok) {
-                 const errorText = await decodeResponse.text();
-                 throw new Error(`Decode failed: ${decodeResponse.status} ${errorText || decodeResponse.statusText}`);
+            if (!decodeLambdaResponse.ok) {
+                 const errorText = await decodeLambdaResponse.text();
+                 throw new Error(`Lambda decode failed: ${decodeLambdaResponse.status} ${errorText || decodeLambdaResponse.statusText}`);
             }
 
-            const responseText = await decodeResponse.text();
+            const responseText = await decodeLambdaResponse.text();
 
             let blob: Blob;
             try {
@@ -114,27 +155,13 @@ const BuildYourNetwork: React.FC = () => {
             const formData = new FormData();
             formData.append('file', xmlBlob, 'input.xml');
 
-            const token = localStorage.getItem("token");
-
-            const convertResponse = await fetch('http://127.0.0.1:5000/api/decode', {
-                method: 'POST',
-                body: formData,
+            // Use your api instance for calls to your backend
+            const convertResponse = await api.post('/decode', formData, {
                 headers: {
-                  Authorization: `Bearer ${token}`,
-                }
+                    // 'Content-Type': 'multipart/form-data' // Axios handles this for FormData
+                },
             });
-
-            if (!convertResponse.ok) {
-                let errData;
-                try {
-                    errData = await convertResponse.json();
-                } catch (e) {
-                     errData = { error: await convertResponse.text() || 'Conversion failed without specific error.' };
-                }
-                throw new Error(errData.error || `Conversion failed: ${convertResponse.status}`);
-            }
-
-            const resultJson = await convertResponse.json();
+            const resultJson = convertResponse.data; // Axios wraps response in .data
 
             if (!resultJson || !resultJson.dsl || !resultJson.react_flow) {
                 throw new Error("Conversion result is missing expected data (dsl or react_flow).");
@@ -167,35 +194,24 @@ const BuildYourNetwork: React.FC = () => {
             );
 
         } catch (err: any) {
-            console.error('Error during decode/convert:', err);
-            setError(`Error: ${err.message || String(err)}`);
+            console.error('Error during decode/convert:', err.response?.data || err.message || err);
+            setError(`Error: ${err.response?.data?.error || err.message || String(err)}`);
             setParsedDevices([]);
             setParsedLinks([]);
             setDslContent('');
         } finally {
             setLoading(false);
         }
-    }, [file]);
+    }, [file]); 
 
     const handleCompileDsl = useCallback(async () => {
         if (!dslContent.trim()) return;
         setLoading(true);
         setError('');
         try {
-            const token = localStorage.getItem("token");
-            const response = await fetch('http://127.0.0.1:5000/api/compile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                 },
-                body: JSON.stringify({ dsl: dslContent }),
-            });
-
-            if (!response.ok) {
-                const errorMsg = await response.text();
-                throw new Error(errorMsg || `Compile failed: ${response.status}`);
-            }
-            const resultJson = await response.json();
+            // Use your api instance
+            const response = await api.post('/compile', { dsl: dslContent });
+            const resultJson = response.data; // Axios wraps response in .data
 
              if (!resultJson || !resultJson.react_flow) {
                 throw new Error("Compile result is missing expected data (react_flow).");
@@ -226,30 +242,30 @@ const BuildYourNetwork: React.FC = () => {
             );
 
         } catch (err: any) {
-            console.error('Error compiling DSL:', err);
-            setError(`Error: ${err.message || String(err)}`);
+            console.error('Error compiling DSL:', err.response?.data || err.message || err);
+            setError(`Error: ${err.response?.data?.error || err.message || String(err)}`);
         } finally {
             setLoading(false);
         }
-    }, [dslContent]);
+    }, [dslContent]); 
 
     const handleOpenSaveDialog = () => {
       setOpenSaveDialog(true);
-      setSaveTitle('');
+      // Do not clear saveTitle here if it might be pre-filled from a loaded topology
     };
 
     const handleCloseSaveDialog = () => {
       setOpenSaveDialog(false);
     };
 
-    // REVISED: Function to save the current React Flow topology to the backend
+    // MODIFIED: Function to save the current topology (DSL + React Flow) to the backend
     const handleSaveTopology = useCallback(async () => {
       if (!saveTitle.trim()) {
         setError('A title is required to save the topology.');
         return;
       }
       if (!dslContent.trim()) { // Check if there's DSL to compile and save
-        setError('No DSL content to save. Please write some DSL or decode a file first.');
+        setError('No DSL content to save. Please write some DSL or decode/load a file first.');
         return;
       }
 
@@ -257,50 +273,39 @@ const BuildYourNetwork: React.FC = () => {
       setError('');
 
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("token"); // Good to check if user is logged in client-side too
         if (!token) {
           throw new Error("Authentication token not found. Please log in.");
         }
 
         // 1. Compile the current DSL content to get the latest React Flow JSON
-        const compileResponse = await fetch('http://127.0.0.1:5000/api/compile', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ dsl: dslContent }),
-        });
-
-        if (!compileResponse.ok) {
-            const errorData = await compileResponse.json();
-            throw new Error(errorData.error || `Failed to compile DSL for saving: ${compileResponse.status}`);
-        }
-
-        const compileResultJson = await compileResponse.json();
+        // Use your api instance
+        const compileResponse = await api.post('/compile', { dsl: dslContent });
+        const compileResultJson = compileResponse.data; // Axios wraps response in .data
 
         if (!compileResultJson || !compileResultJson.react_flow) {
             throw new Error("Compilation result is missing expected data (react_flow).");
         }
 
         const reactFlowTopologyToSave = compileResultJson.react_flow;
+        
+        // MODIFICATION: Prepare content to save both DSL and React Flow
+        const topologyDataToSave = {
+            dsl: dslContent,
+            reactFlow: reactFlowTopologyToSave,
+        };
 
-        // 2. Save the compiled React Flow JSON to the snippets
-        const saveResponse = await fetch('http://127.0.0.1:5000/api/snippets', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+        // 2. Save the structured content to the snippets
+        // Use your api instance
+        const saveResponse = await api.post('/snippets', {
             title: saveTitle,
-            content: JSON.stringify(reactFlowTopologyToSave),
-          }),
+            content: JSON.stringify(topologyDataToSave), // Save the combined object as a string
         });
 
-        if (!saveResponse.ok) {
-          const errorData = await saveResponse.json();
-          throw new Error(errorData.msg || `Failed to save topology: ${saveResponse.status}`);
+        // Backend returns 201 on successful snippet creation. Axios .data will have the response.
+        if (saveResponse.status !== 201) { // Check for explicit 201
+          const errorData = saveResponse.data;
+          throw new Error(errorData.msg || `Failed to save topology: ${saveResponse.status} - ${JSON.stringify(errorData)}`);
         }
 
         alert('Topology saved successfully!');
@@ -311,27 +316,31 @@ const BuildYourNetwork: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    }, [saveTitle, dslContent]); // Dependency now includes dslContent
+    }, [saveTitle, dslContent]); 
 
   return (
     <Container
       maxWidth={false}
       disableGutters
       sx={{
-        height: '80vh',
-        width: '90vw',
+        height: 'calc(100vh - 64px - 40px)', // Adjust height considering Navbar and potential margins
+        width: '95vw', // Match Navbar width for consistency
+        margin: '20px auto', // Center it like Navbar
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: 'black',
-        borderRadius: 1,
+        bgcolor: alpha(appleGray[800], 0.8), // Slightly transparent to see page background
+        backdropFilter: 'blur(10px)',
+        border: `1px solid ${alpha(appleGray[600], 0.5)}`,
+        overflow: 'hidden', // Prevent content from spilling during resize
+        color: appleWhite, // Ensure text inside is generally white
       }}
     >
       {/* Header Toolbar Area */}
       <Box
         sx={{
           padding: '12px 16px',
-          bgcolor: 'black',
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          bgcolor: alpha(appleGray[900], 0.7), // Darker, slightly transparent toolbar
+          borderBottom: `1px solid ${alpha(appleGray[600], 0.5)}`,
           display: 'flex',
           alignItems: 'center',
           gap: 2,
@@ -339,7 +348,7 @@ const BuildYourNetwork: React.FC = () => {
         }}
       >
         <Upload
-          accept=".pkt"
+          accept=".pkt, .pka" // Allow .pka as well
           beforeUpload={() => false}
           onChange={handleFileChange}
           showUploadList={false}
@@ -350,13 +359,14 @@ const BuildYourNetwork: React.FC = () => {
               startIcon={<UploadOutlined />}
               size="small"
               disabled={loading}
+              sx={{ color: appleWhite, borderColor: appleGray[500], '&:hover': { borderColor: theme.palette.primary.main } }}
            >
-             Select PKT File
+             Select PKT/PKA File
           </Button>
         </Upload>
 
         {fileName && !loading && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', mr: 'auto' }}>
+            <Typography variant="body2" sx={{ color: appleGray[300], mr: 'auto' }}>
                 {fileName}
             </Typography>
         )}
@@ -368,7 +378,6 @@ const BuildYourNetwork: React.FC = () => {
           onClick={handleDecodeAndConvert}
           disabled={!file || loading}
           size="small"
-          sx={{ ml: 1 }}
         >
           Decode & Convert
         </Button>
@@ -380,7 +389,6 @@ const BuildYourNetwork: React.FC = () => {
             onClick={handleCompileDsl}
             disabled={loading || !dslContent.trim()}
             size="small"
-            sx={{ ml: 1 }}
           >
             Compile DSL
           </Button>
@@ -389,44 +397,59 @@ const BuildYourNetwork: React.FC = () => {
         {/* REVISED: Save Topology Button disabled condition */}
         <Button
           variant="contained"
-          color="secondary"
-          onClick={handleOpenSaveDialog}
+          onClick={handleOpenSaveDialog} // Removed color="secondary" to let theme primary apply or explicit sx
           disabled={loading || !dslContent.trim()} // Disabled if no DSL content
           size="small"
-          sx={{ ml: 1 }}
+          sx={{ 
+            ml: 1, 
+            backgroundColor: theme.palette.primary.main, // Explicitly use primary color
+            '&:hover': { backgroundColor: theme.palette.primary.dark } 
+          }}
         >
           Save Topology
         </Button>
 
 
-        {loading && <CircularProgress size={20} sx={{ ml: 2 }} />}
+        {loading && <CircularProgress size={20} sx={{ ml: 2, color: theme.palette.primary.main }} />}
       </Box>
 
        {/* Error Alert Area */}
        {error && (
-         <Box sx={{ px: 2, pt: 1, flexShrink: 0 }}>
-            <Alert severity="error" onClose={() => setError('')}>
+         <Box sx={{ px: 2, py:1, flexShrink: 0 }}> {/* Adjusted padding */}
+            <Alert 
+                severity="error" 
+                onClose={() => setError('')}
+                sx={{
+                    bgcolor: alpha(theme.palette.error.dark, 0.9), // Use theme error color
+                    color: appleWhite, // Keep text white for contrast
+                    '.MuiAlert-icon': { color: appleWhite },
+                    '.MuiAlert-action button': { color: appleWhite } // For close button if shown
+                }}
+            >
             {error}
             </Alert>
          </Box>
        )}
 
       {/* Splitter takes remaining space */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', borderTop: `1px solid ${theme.palette.divider}`, position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', borderTop: `1px solid ${alpha(appleGray[600],0.3)}`, position: 'relative' }}>
           <Splitter
              style={{
                  height: '100%',
                  width: '100%',
-                 position: 'absolute',
+                 position: 'absolute', // Ensure Splitter fills the Box
              }}
           >
-             <Splitter.Panel defaultSize="40%" min="20%" max="60%">
-                <Box sx={{ height: '100%', width: '100%', bgcolor: appleGray[800], overflow: 'hidden', borderRadius: 1 }}>
+             <Splitter.Panel // Antd specific component for splitter
+                // defaultSize="40%" // Removed as it can cause issues with dynamic content
+             >
+                <Box sx={{ height: '100%', width: '100%', bgcolor: appleGray[800], overflow: 'hidden', borderRadius: '0 0 0 8px' }}>
                     <TextEditor value={dslContent} onChange={setDslContent} />
                 </Box>
              </Splitter.Panel>
-             <Splitter.Panel>
-                <Box sx={{ height: '100%', width: '100%', bgcolor: appleGray[100], overflow: 'hidden' }}>
+             <Splitter.Panel // Antd specific component for splitter
+             >
+                <Box sx={{ height: '100%', width: '100%', bgcolor: appleGray[900], overflow: 'hidden', borderRadius: '0 0 8px 0' }}> {/* Darker for visualization */}
                      <Visualization devices={parsedDevices} links={parsedLinks} />
                 </Box>
              </Splitter.Panel>
@@ -434,11 +457,21 @@ const BuildYourNetwork: React.FC = () => {
        </Box>
 
         {/* Material-UI Dialog for Save Topology */}
-        <Dialog open={openSaveDialog} onClose={handleCloseSaveDialog}>
-          <DialogTitle>Save Current Topology</DialogTitle>
+        <Dialog 
+            open={openSaveDialog} 
+            onClose={handleCloseSaveDialog}
+            PaperProps={{
+                style: {
+                    backgroundColor: appleGray[700], // Dark dialog background
+                    color: appleWhite, // White text in dialog
+                    borderRadius: theme.shape.borderRadius // Consistent rounding
+                }
+            }}
+        >
+          <DialogTitle sx={{color: appleWhite}}>Save Current Topology</DialogTitle>
           <DialogContent>
-            <DialogContentText>
-              Please enter a title for your React Flow topology. This will help you identify it later in your cabinet.
+            <DialogContentText sx={{color: appleGray[300]}}>
+              Please enter a title for your topology. This will help you identify it later in your cabinet.
             </DialogContentText>
             <TextField
               autoFocus
@@ -450,13 +483,20 @@ const BuildYourNetwork: React.FC = () => {
               variant="standard"
               value={saveTitle}
               onChange={(e) => setSaveTitle(e.target.value)}
-              error={!!error && error.includes('title is required')}
-              helperText={error.includes('title is required') ? error : ''}
+              error={!!error && error.includes('title is required')} 
+              helperText={error.includes('title is required') ? 'Title is required.' : ''}
+              InputLabelProps={{ style: { color: appleGray[200] } }}
+              InputProps={{ style: { color: appleWhite } }}
+              sx={{
+                '& .MuiInput-underline:before': { borderBottomColor: appleGray[500] },
+                '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: theme.palette.primary.main },
+                '& .MuiInput-underline.Mui-error:after': { borderBottomColor: theme.palette.error.main },
+             }}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseSaveDialog}>Cancel</Button>
-            <Button onClick={handleSaveTopology} disabled={loading || !saveTitle.trim()}>Save</Button>
+            <Button onClick={handleCloseSaveDialog} sx={{ color: appleGray[200] }}>Cancel</Button>
+            <Button onClick={handleSaveTopology} disabled={loading || !saveTitle.trim()} sx={{ color: theme.palette.primary.main }}>Save</Button>
           </DialogActions>
         </Dialog>
     </Container>
